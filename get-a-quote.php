@@ -27,7 +27,7 @@
                 <div class="col-md-9 pe-5">
                     <div class="title-wrap mb-0">
                         <div class="section-title typo-white mb-0">
-                            <h2 class="title mb-0">“Pray! And listen to God! You can do this alone, but find somebody to
+                            <h2 class="title mb-0">“Pray! And listen to God! You can't do this alone, but find somebody to
                                 do it with you”</h2>
                         </div>
                     </div>

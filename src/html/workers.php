@@ -61,9 +61,9 @@ $profileImage = !empty($row['profile_photo'])
                                         <div class="nk-block-head-content nk-block-between">
                                             <h4 class="nk-block-title">Worker's List</h4>
                                             <div class="nk-block-head-content">
-                                                <a href="#" class="btn btn-primary" data-toggle="modal"
-                                                    data-target="#addEventPopup"><em
-                                                        class="icon ni ni-plus"></em><span>Add New Worker</span></a>
+                                                <a href="#" class="btn btn-primary" data-toggle="modal" data-target="#addEventPopup">
+                                                    <em class="icon ni ni-plus"></em><span>Add New Worker</span>
+                                                </a>
                                             </div><!-- .nk-block-head-content -->
                                         </div>
                                     </div>
@@ -93,7 +93,7 @@ $profileImage = !empty($row['profile_photo'])
                                                 <tbody>
                                                     <?php
                                                         // Fetch workers from the database
-                                                        $stmt = $conn->prepare("SELECT id, name, email, phone, department, units, level, status, passport FROM workers ORDER BY name ASC");
+                                                        $stmt = $conn->prepare("SELECT id, uin, name, email, phone, dob, department, units, level, admission_year, graduation_year, status, passport FROM workers ORDER BY name ASC");
                                                         $stmt->execute();
                                                         $workers = $stmt->get_result();
                                                         $stmt->close();
@@ -193,7 +193,7 @@ $profileImage = !empty($row['profile_photo'])
                                                                             data-toggle="dropdown"><em
                                                                                 class="icon ni ni-more-h"></em></a>
                                                                         <div class="dropdown-menu dropdown-menu-right">
-                                                                                <ul class="link-list-opt no-bdr">
+                                                                            <ul class="link-list-opt no-bdr">
                                                                                 <?php if ($worker['status'] === 'Active'): ?>
                                                                                     <li>
                                                                                         <a href="#" class="worker-action" 
@@ -227,6 +227,34 @@ $profileImage = !empty($row['profile_photo'])
                                                                                     data-action="graduated">
                                                                                         <em class="icon ni ni-coffee"></em>
                                                                                         <span>Graduated</span>
+                                                                                    </a>
+                                                                                </li>
+                                                                                <li>
+                                                                                    <a href="#" class="edit-worker-btn" 
+                                                                                    data-id="<?= $worker['id'] ?>"
+                                                                                    data-uin="<?= htmlspecialchars($worker['uin'] ?? '') ?>"
+                                                                                    data-name="<?= htmlspecialchars($worker['name']) ?>"
+                                                                                    data-email="<?= htmlspecialchars($worker['email']) ?>"
+                                                                                    data-phone="<?= htmlspecialchars($worker['phone']) ?>"
+                                                                                    data-dob="<?= htmlspecialchars($worker['dob'] ?? '') ?>"
+                                                                                    data-units="<?= htmlspecialchars($worker['units'] ?? '') ?>"
+                                                                                    data-department="<?= htmlspecialchars($worker['department'] ?? '') ?>"
+                                                                                    data-level="<?= htmlspecialchars($worker['level'] ?? '') ?>"
+                                                                                    data-admission_year="<?= htmlspecialchars($worker['admission_year'] ?? '') ?>"
+                                                                                    data-graduation_year="<?= htmlspecialchars($worker['graduation_year'] ?? '') ?>"
+                                                                                    data-status="<?= htmlspecialchars($worker['status']) ?>">
+                                                                                        <em class="icon ni ni-edit"></em>
+                                                                                        <span>Edit Details</span>
+                                                                                    </a>
+                                                                                </li>
+                                                                                <li>
+                                                                                    <a href="#" class="change-passport-btn" 
+                                                                                    data-id="<?= $worker['id'] ?>"
+                                                                                    data-name="<?= htmlspecialchars($worker['name']) ?>"
+                                                                                    data-uin="<?= htmlspecialchars($worker['uin'] ?? '') ?>"
+                                                                                    data-img="<?= htmlspecialchars($w_img) ?>">
+                                                                                        <em class="icon ni ni-camera"></em>
+                                                                                        <span>Change Passport</span>
                                                                                     </a>
                                                                                 </li>
                                                                             </ul>
@@ -486,6 +514,10 @@ $profileImage = !empty($row['profile_photo'])
                         <label class="form-label">Regime <span class="text-danger">*</span></label>
                         <input type="text" id="execRegime" class="form-control" placeholder="e.g. 2024/2025">
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">WhatsApp Link or Phone Number <small class="text-muted">(Optional)</small></label>
+                        <input type="text" id="execWhatsapp" class="form-control" placeholder="e.g. https://wa.me/2348000000000">
+                    </div>
                     <div class="alert alert-info py-2 px-3 mb-0" style="font-size:13px;border-radius:6px;">
                         <em class="icon ni ni-info-fill me-1"></em> The worker's passport photo uploaded during registration will be used automatically.
                     </div>
@@ -501,6 +533,134 @@ $profileImage = !empty($row['profile_photo'])
         </div>
     </div>
     <!-- ========== MAKE EXECUTIVE MODAL END ========== -->
+
+    <!-- ========== EDIT WORKER MODAL ========== -->
+    <div class="modal fade" tabindex="-1" id="editWorkerModal">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Worker Details</h5>
+                    <a href="#" class="close" data-dismiss="modal"><em class="icon ni ni-cross"></em></a>
+                </div>
+                <div class="modal-body">
+                    <form id="editWorkerForm">
+                        <input type="hidden" name="id" id="editWorkerId">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="name" id="editWorkerName" placeholder="Enter full name" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Email Address <span class="text-danger">*</span></label>
+                                    <input type="email" class="form-control" name="email" id="editWorkerEmail" placeholder="Enter email address" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="phone" id="editWorkerPhone" placeholder="Enter phone number" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Date of Birth <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" name="dob" id="editWorkerDob" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Unit(s) <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="units" id="editWorkerUnits" placeholder="Enter unit(s)" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Department <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="department" id="editWorkerDept" placeholder="Enter department" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Level <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="level" id="editWorkerLevel" placeholder="Enter level" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Admission Year <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" name="admission_year" id="editWorkerAdmYear" placeholder="e.g. 2021" max="<?= date('Y') ?>" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Graduation Year <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" name="graduation_year" id="editWorkerGradYear" placeholder="e.g. 2025" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Status <span class="text-danger">*</span></label>
+                                    <select class="form-control" name="status" id="editWorkerStatus" required>
+                                        <option value="Active">Active</option>
+                                        <option value="Inactive">Inactive</option>
+                                        <option value="Alumni">Alumni</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="editWorkerError" class="text-danger mt-3" style="display:none;"></div>
+                        <div class="form-group mt-4 text-right">
+                            <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">
+                                <em class="icon ni ni-save"></em> Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ========== EDIT WORKER MODAL END ========== -->
+
+    <!-- ========== CHANGE PASSPORT MODAL ========== -->
+    <div class="modal fade" tabindex="-1" id="changePassportModal">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Change Passport Photo</h5>
+                    <a href="#" class="close" data-dismiss="modal"><em class="icon ni ni-cross"></em></a>
+                </div>
+                <div class="modal-body">
+                    <form id="changePassportForm" enctype="multipart/form-data">
+                        <input type="hidden" name="id" id="passportWorkerId">
+                        <div class="text-center mb-3">
+                            <div class="mb-2" id="currentPassportPreviewWrap">
+                                <img id="currentPassportPreview" src="images/logo.png" alt="Current Passport" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid #6576ff; box-shadow: 0 3px 10px rgba(0,0,0,0.15);">
+                            </div>
+                            <h6 id="passportWorkerName" class="mb-0"></h6>
+                            <span id="passportWorkerUin" class="sub-text text-muted"></span>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Upload New Passport Photo <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control" name="passport" id="newPassportInput" accept="image/*" required>
+                            <small class="text-muted d-block mt-1">Accepted formats: JPG, JPEG, PNG. Max size: 2MB</small>
+                        </div>
+                        <div id="passportModalError" class="text-danger mt-2" style="display:none;"></div>
+                        <div class="form-group mt-4 text-right">
+                            <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">
+                                <em class="icon ni ni-upload-cloud"></em> Update Passport
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ========== CHANGE PASSPORT MODAL END ========== -->
 
     <!-- ========== ACTION SCRIPT START ========== -->
     <script>
@@ -523,6 +683,7 @@ $profileImage = !empty($row['profile_photo'])
             $('#confirmMakeExecBtn').on('click', function () {
                 var office   = $.trim($('#execOffice').val());
                 var regime   = $.trim($('#execRegime').val());
+                var whatsapp = $.trim($('#execWhatsapp').val());
 
                 if (!office || !regime) {
                     $('#execModalError').text('Please fill in both Office and Regime.').show();
@@ -536,7 +697,7 @@ $profileImage = !empty($row['profile_photo'])
                 $.ajax({
                     url: 'html/worker_action.php',
                     type: 'POST',
-                    data: { id: pendingExecId, action: 'make_executive', office: office, regime: regime },
+                    data: { id: pendingExecId, action: 'make_executive', office: office, regime: regime, whatsapp: whatsapp },
                     dataType: 'json',
                     success: function (data) {
                         if (data.status === 'success') {
@@ -550,10 +711,136 @@ $profileImage = !empty($row['profile_photo'])
                                 <em class="nk-modal-icon icon icon-circle icon-circle-xxl ni ni-cross bg-danger"></em>
                                 <h4 class="nk-modal-title">Failed!</h4>
                                 <p class="text-danger mt-2">${data.message}</p>
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                                </div>
                             `);
                         }
                         $('#resultModal').modal({ backdrop: 'static', keyboard: false });
                         $('#resultModal').modal('show');
+                        if (data.status === 'success') {
+                            setTimeout(function () { location.reload(); }, 2000);
+                        }
+                    },
+                    error: function (xhr) {
+                        alert('Request failed: ' + xhr.responseText);
+                    }
+                });
+            });
+
+            // Open Edit Worker Modal
+            $(document).on('click', '.edit-worker-btn', function (e) {
+                e.preventDefault();
+                $('#editWorkerId').val($(this).data('id'));
+                $('#editWorkerName').val($(this).data('name'));
+                $('#editWorkerEmail').val($(this).data('email'));
+                $('#editWorkerPhone').val($(this).data('phone'));
+                $('#editWorkerDob').val($(this).data('dob'));
+                $('#editWorkerUnits').val($(this).data('units'));
+                $('#editWorkerDept').val($(this).data('department'));
+                $('#editWorkerLevel').val($(this).data('level'));
+                $('#editWorkerAdmYear').val($(this).data('admission_year'));
+                $('#editWorkerGradYear').val($(this).data('graduation_year'));
+                $('#editWorkerStatus').val($(this).data('status'));
+                $('#editWorkerError').hide().text('');
+                $('#editWorkerModal').modal('show');
+            });
+
+            // Submit Edit Worker Form
+            $('#editWorkerForm').on('submit', function (e) {
+                e.preventDefault();
+                var formData = $(this).serialize();
+
+                $.ajax({
+                    url: 'html/edit_worker.php',
+                    type: 'POST',
+                    data: formData,
+                    dataType: 'json',
+                    success: function (data) {
+                        $('#editWorkerModal').modal('hide');
+                        if (data.status === 'success') {
+                            $('#resultModalBody').html(`
+                                <em class="nk-modal-icon icon icon-circle icon-circle-xxl ni ni-check bg-success"></em>
+                                <h4 class="nk-modal-title">Details Updated!</h4>
+                                <p class="sub-text mt-2">${data.message}</p>
+                            `);
+                        } else {
+                            $('#resultModalBody').html(`
+                                <em class="nk-modal-icon icon icon-circle icon-circle-xxl ni ni-cross bg-danger"></em>
+                                <h4 class="nk-modal-title">Update Failed</h4>
+                                <p class="text-danger mt-2">${data.message}</p>
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                                </div>
+                            `);
+                        }
+                        $('#resultModal').modal({ backdrop: 'static', keyboard: false });
+                        $('#resultModal').modal('show');
+
+                        if (data.status === 'success') {
+                            setTimeout(function () { location.reload(); }, 2000);
+                        }
+                    },
+                    error: function (xhr) {
+                        alert('Request failed: ' + xhr.responseText);
+                    }
+                });
+            });
+
+            // Open Change Passport Modal
+            $(document).on('click', '.change-passport-btn', function (e) {
+                e.preventDefault();
+                var id   = $(this).data('id');
+                var name = $(this).data('name');
+                var uin  = $(this).data('uin');
+                var img  = $(this).data('img');
+
+                $('#passportWorkerId').val(id);
+                $('#passportWorkerName').text(name);
+                $('#passportWorkerUin').text(uin ? 'UIN: ' + uin : '');
+                if (img && img !== '') {
+                    $('#currentPassportPreview').attr('src', img);
+                } else {
+                    $('#currentPassportPreview').attr('src', 'images/logo.png');
+                }
+                $('#newPassportInput').val('');
+                $('#passportModalError').hide().text('');
+                $('#changePassportModal').modal('show');
+            });
+
+            // Submit Change Passport Form
+            $('#changePassportForm').on('submit', function (e) {
+                e.preventDefault();
+                var formData = new FormData(this);
+
+                $.ajax({
+                    url: 'html/change_passport.php',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    dataType: 'json',
+                    success: function (data) {
+                        $('#changePassportModal').modal('hide');
+                        if (data.status === 'success') {
+                            $('#resultModalBody').html(`
+                                <em class="nk-modal-icon icon icon-circle icon-circle-xxl ni ni-check bg-success"></em>
+                                <h4 class="nk-modal-title">Passport Updated!</h4>
+                                <p class="sub-text mt-2">${data.message}</p>
+                            `);
+                        } else {
+                            $('#resultModalBody').html(`
+                                <em class="nk-modal-icon icon icon-circle icon-circle-xxl ni ni-cross bg-danger"></em>
+                                <h4 class="nk-modal-title">Upload Failed</h4>
+                                <p class="text-danger mt-2">${data.message}</p>
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                                </div>
+                            `);
+                        }
+                        $('#resultModal').modal({ backdrop: 'static', keyboard: false });
+                        $('#resultModal').modal('show');
+
                         if (data.status === 'success') {
                             setTimeout(function () { location.reload(); }, 2000);
                         }
@@ -599,6 +886,9 @@ $profileImage = !empty($row['profile_photo'])
                                 <em class="nk-modal-icon icon icon-circle icon-circle-xxl ni ni-cross bg-danger"></em>
                                 <h4 class="nk-modal-title">Failed!</h4>
                                 <p class="text-danger mt-2">${data.message}</p>
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                                </div>
                             `);
                         }
                         $('#resultModal').modal({ backdrop: 'static', keyboard: false });

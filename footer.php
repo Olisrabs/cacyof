@@ -5,7 +5,7 @@ if (!isset($conn)) {
 }
 if (isset($conn)) {
     // 1. Fetch all distinct regimes to find the latest
-    $reg_res = $conn->query("SELECT DISTINCT regime FROM executives");
+    $reg_res = $conn->query("SELECT DISTINCT regime FROM executives WHERE is_executive != 'No'");
     $latest_regime = '';
     if ($reg_res && $reg_res->num_rows > 0) {
         $regimes_list = [];

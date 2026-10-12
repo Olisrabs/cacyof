@@ -43,8 +43,8 @@ if (!$id || !$action) {
     exit();
 }
 
-// Verify worker exists — also fetch uin, name, and passport for executive insert
-$check = $conn->prepare("SELECT id, uin, name, status, passport FROM workers WHERE id = ?");
+// Verify worker exists — also fetch uin, name, status, passport, and phone for executive insert
+$check = $conn->prepare("SELECT id, uin, name, status, passport, phone FROM workers WHERE id = ?");
 $check->bind_param("i", $id);
 $check->execute();
 $result = $check->get_result();
@@ -77,17 +77,44 @@ switch ($action) {
         break;
 
     case 'make_executive':
-        $office = trim($_POST['office'] ?? '');
-        $regime = trim($_POST['regime'] ?? '');
+        $office   = trim($_POST['office'] ?? '');
+        $regime   = trim($_POST['regime'] ?? '');
+        $whatsapp = trim($_POST['whatsapp'] ?? '');
 
         if (!$office || !$regime) {
             echo json_encode(['status' => 'error', 'message' => 'Office and Regime are required.']);
             exit();
         }
 
+        // Check if the user is already recorded as an executive for the inputted regime
+        $chk_dup = $conn->prepare("SELECT id, office, is_executive FROM executives WHERE (uin = ? OR name = ?) AND regime = ?");
+        $chk_dup->bind_param("sss", $worker['uin'], $worker['name'], $regime);
+        $chk_dup->execute();
+        $dup_res = $chk_dup->get_result();
+
+        if ($dup_res->num_rows > 0) {
+            $existing = $dup_res->fetch_assoc();
+            if ($existing['is_executive'] !== 'No') {
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => 'Duplicate Record: ' . $worker['name'] . ' is already registered as an executive (' . $existing['office'] . ') for the ' . $regime . ' regime.'
+                ]);
+                $chk_dup->close();
+                $conn->close();
+                exit();
+            } else {
+                // If previously marked unexecutive ('No'), remove old record so fresh one can be saved
+                $del_old = $conn->prepare("DELETE FROM executives WHERE id = ?");
+                $del_old->bind_param("i", $existing['id']);
+                $del_old->execute();
+                $del_old->close();
+            }
+        }
+        $chk_dup->close();
+
         // Get the latest regime currently in the executives table before inserting the new one
         $prev_latest_regime = '';
-        $reg_res = $conn->query("SELECT DISTINCT regime FROM executives");
+        $reg_res = $conn->query("SELECT DISTINCT regime FROM executives WHERE is_executive != 'No'");
         if ($reg_res && $reg_res->num_rows > 0) {
             $regimes_list = [];
             while ($row_reg = $reg_res->fetch_assoc()) {
@@ -128,9 +155,24 @@ switch ($action) {
         }
         $stmt->close();
 
-        // Insert into executives table (with worker's passport)
-        $ins = $conn->prepare("INSERT INTO executives (uin, name, office, regime, passport) VALUES (?, ?, ?, ?, ?)");
-        $ins->bind_param("sssss", $worker['uin'], $worker['name'], $office, $regime, $passport_name);
+        // Ensure whatsapp column exists in executives table
+        $check_cols = $conn->query("SHOW COLUMNS FROM `executives` LIKE 'whatsapp'");
+        if ($check_cols && $check_cols->num_rows == 0) {
+            $conn->query("ALTER TABLE `executives` ADD COLUMN `whatsapp` VARCHAR(255) DEFAULT NULL AFTER `passport`");
+        }
+
+        // If no whatsapp link is provided, default to a wa.me link using the worker's phone number
+        if (empty($whatsapp) && !empty($worker['phone'])) {
+            $clean_phone = preg_replace('/[^0-9]/', '', $worker['phone']);
+            if (strlen($clean_phone) === 11 && $clean_phone[0] === '0') {
+                $clean_phone = '234' . substr($clean_phone, 1);
+            }
+            $whatsapp = 'https://wa.me/' . $clean_phone;
+        }
+
+        // Insert into executives table (with worker's passport, whatsapp, and is_executive = 'Yes')
+        $ins = $conn->prepare("INSERT INTO executives (uin, name, office, regime, passport, whatsapp, is_executive) VALUES (?, ?, ?, ?, ?, ?, 'Yes')");
+        $ins->bind_param("ssssss", $worker['uin'], $worker['name'], $office, $regime, $passport_name, $whatsapp);
 
         if ($ins->execute()) {
             // Check if the new regime is greater than the previous latest regime

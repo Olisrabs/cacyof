@@ -9,12 +9,19 @@ $conn->query("CREATE TABLE IF NOT EXISTS `executives` (
     `office` VARCHAR(255) NOT NULL,
     `regime` VARCHAR(100) NOT NULL,
     `passport` VARCHAR(255) DEFAULT NULL,
+    `whatsapp` VARCHAR(255) DEFAULT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`)
 )");
 
+// Check if whatsapp column exists, if not add it
+$check_cols = $conn->query("SHOW COLUMNS FROM `executives` LIKE 'whatsapp'");
+if ($check_cols && $check_cols->num_rows == 0) {
+    $conn->query("ALTER TABLE `executives` ADD COLUMN `whatsapp` VARCHAR(255) DEFAULT NULL AFTER `passport`");
+}
+
 // Fetch all distinct regimes for dropdown
-$all_regimes_res = $conn->query("SELECT DISTINCT regime FROM executives ORDER BY regime DESC");
+$all_regimes_res = $conn->query("SELECT DISTINCT regime FROM executives WHERE is_executive != 'No' ORDER BY regime DESC");
 $all_regimes = [];
 if ($all_regimes_res && $all_regimes_res->num_rows > 0) {
     while ($r = $all_regimes_res->fetch_assoc()) {
@@ -32,7 +39,7 @@ $selected_regime = isset($_GET['regime']) && in_array($_GET['regime'], $all_regi
 
 $execs_res = null;
 if (!empty($selected_regime)) {
-    $stmt_exec = $conn->prepare("SELECT * FROM executives WHERE regime = ? ORDER BY id ASC");
+    $stmt_exec = $conn->prepare("SELECT e.*, w.phone FROM executives e LEFT JOIN workers w ON e.uin = w.uin WHERE e.is_executive != 'No' AND e.regime = ? ORDER BY e.id ASC");
     if ($stmt_exec) {
         $stmt_exec->bind_param("s", $selected_regime);
         $stmt_exec->execute();
@@ -185,33 +192,35 @@ function about_passport_src($passport_file) {
 									<div class="title-wrap text-center">
 										<div class="section-title">
 											<span class="sub-title theme-color text-uppercase">Our Team</span>
-											<h2 class="section-title margin-top-5">Our Executives <?= !empty($selected_regime) ? '(' . htmlspecialchars($selected_regime) . ')' : '' ?></h2>
+											<h2 class="section-title margin-top-5">
+												<?php if (count($all_regimes) > 1): ?>
+												<span class="dropdown d-inline-block">
+													<span role="button" data-bs-toggle="dropdown" aria-expanded="false" style="cursor: pointer; color: inherit;">
+														Our Executives <?= !empty($selected_regime) ? '(' . htmlspecialchars($selected_regime) . ')' : '' ?>
+														<i class="fa fa-caret-down" style="font-size: 0.6em; margin-left: 8px; vertical-align: middle;"></i>
+													</span>
+													<ul class="dropdown-menu shadow" style="border-radius: 8px; border: 1px solid rgba(0,0,0,0.1); min-width: 220px; font-size: 14px; font-weight: normal; text-transform: none; z-index: 1050;">
+														<?php foreach ($all_regimes as $reg): ?>
+															<li>
+																<a class="dropdown-item px-3 py-2 <?= $selected_regime === $reg ? 'active fw-bold' : '' ?>" 
+																   href="about-us.php?regime=<?= urlencode($reg) ?>#team-section" 
+																   style="<?= $selected_regime === $reg ? 'background-color:#6576ff; color:#fff;' : 'color:#333;' ?>">
+																	<i class="ti-calendar" style="margin-right: 6px;"></i>
+																	<?= htmlspecialchars($reg) ?> <?= ($reg === $latest_regime) ? '<span class="badge ' . ($selected_regime === $reg ? 'bg-light text-dark' : 'bg-primary') . '" style="font-size:10px; margin-left:6px;">Current</span>' : '' ?>
+																</a>
+															</li>
+														<?php endforeach; ?>
+													</ul>
+												</span>
+												<?php else: ?>
+													Our Executives <?= !empty($selected_regime) ? '(' . htmlspecialchars($selected_regime) . ')' : '' ?>
+												<?php endif; ?>
+											</h2>
 											<span class="border-bottom center"></span>
 										</div>
 									</div>
 								</div>
 							</div>
-							<?php if (count($all_regimes) > 1): ?>
-							<!-- Past Executives Regime Dropdown -->
-							<div class="row justify-content-center mb-4">
-								<div class="col-md-6 col-lg-4 text-center">
-									<form method="GET" action="" id="regime-filter-form">
-										<div class="input-group" style="border-radius:8px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-											<label class="input-group-text" style="background:#6576ff; color:#fff; border:none; font-weight:600; font-size:14px;">
-												<i class="ti-calendar" style="margin-right:6px;"></i> Regime
-											</label>
-											<select name="regime" id="regimeDropdown" class="form-control form-select" onchange="document.getElementById('regime-filter-form').submit()" style="border:2px solid #6576ff; font-weight:600; color:#333;">
-												<?php foreach ($all_regimes as $reg): ?>
-													<option value="<?= htmlspecialchars($reg) ?>" <?= $selected_regime === $reg ? 'selected' : '' ?>>
-														<?= htmlspecialchars($reg) ?> <?= ($reg === $latest_regime) ? '(Current)' : '(Past)' ?>
-													</option>
-												<?php endforeach; ?>
-											</select>
-										</div>
-									</form>
-								</div>
-							</div>
-							<?php endif; ?>
 							<!--Team Main Slider-->
 							<div class="owl-carousel team-main-wrapper" data-loop="1" data-nav="0" data-dots="1" data-autoplay="1" data-autoplaypause="1" data-autoplaytime="5000" data-smartspeed="1000" data-margin="30" data-items="3" data-items-tab="2" data-items-mob="1">
 								<?php if ($execs_res && $execs_res->num_rows > 0): ?>
@@ -220,17 +229,29 @@ function about_passport_src($passport_file) {
 										$exec_name    = htmlspecialchars($exec['name']);
 										$name_len     = strlen($exec['name']);
 										$name_fs      = $name_len > 28 ? '13px' : ($name_len > 20 ? '16px' : '19px');
+										
+										$whatsapp_link = !empty($exec['whatsapp']) ? trim($exec['whatsapp']) : '';
+										if (empty($whatsapp_link) && !empty($exec['phone'])) {
+											$clean_phone = preg_replace('/[^0-9]/', '', $exec['phone']);
+											if (strlen($clean_phone) === 11 && $clean_phone[0] === '0') {
+												$clean_phone = '234' . substr($clean_phone, 1);
+											}
+											$whatsapp_link = 'https://wa.me/' . $clean_phone;
+										}
 									?>
 									<div class="item">
 										<div class="team-style-1">
 											<div class="team-inner margin-bottom-20 box-shadow1 b-radius-8" style="background:#fff; overflow:hidden; display:flex; flex-direction:column;">
 												<div class="team-thumb mb-0 relative" style="flex:0 0 auto;">
 													<div class="team-overlay"></div>
+													<?php if (!empty($whatsapp_link)): ?>
+														<a href="<?= htmlspecialchars($whatsapp_link) ?>" target="_blank" title="WhatsApp Chat" style="position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); width: 60px; height: 60px; z-index: 10; border-radius: 50%; cursor: pointer;"></a>
+													<?php endif; ?>
 													<img src="<?= $passport_src ?>" class="img-fluid thumb w-100" style="height:300px; object-fit:cover; object-position:top;" alt="team-img" />
 												</div>
 												<div class="team-details text-center pad-20" style="flex:0 0 80px; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:80px; max-height:80px; overflow:hidden;">
 													<div class="team-name" style="width:100%;">
-														<h3 class="mb-1" style="font-size:<?= $name_fs ?>; font-weight:700; color:#222; line-height:1.2; word-break:break-word;"><?= $exec_name ?></h3>
+														<h3 class="mb-1" style="font-size:<?= $name_fs ?>; font-weight:700; color:#fff; line-height:1.2; word-break:break-word;"><?= $exec_name ?></h3>
 													</div>
 													<div class="team-designation">
 														<p class="mb-0 text-soft fw-600" style="color:#6576ff; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;"><?= htmlspecialchars($exec['office']) ?></p>

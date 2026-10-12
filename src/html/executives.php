@@ -20,7 +20,7 @@ $profileImage = !empty($row['profile_photo'])
     : $defaultImage;
 
 // Fetch all distinct regimes for the dropdown
-$regimes_stmt = $conn->prepare("SELECT DISTINCT regime FROM executives ORDER BY regime DESC");
+$regimes_stmt = $conn->prepare("SELECT DISTINCT regime FROM executives WHERE is_executive != 'No' ORDER BY regime DESC");
 $regimes_stmt->execute();
 $regimes_result = $regimes_stmt->get_result();
 $regimes = [];
@@ -35,23 +35,23 @@ $selected_regime = $_GET['regime'] ?? ($regimes[0] ?? '');
 // Fetch executives for selected regime
 if ($selected_regime !== '') {
     $exec_stmt = $conn->prepare(
-        "SELECT w.id, w.email, w.name, w.phone, w.department, w.units, w.level, w.status,
-                e.office, e.regime, e.passport,
+        "SELECT w.id, w.uin, w.email, w.name, w.phone, w.department, w.units, w.level, w.status,
+                e.id AS exec_id, e.office, e.regime, e.passport, e.whatsapp,
                 w.passport AS worker_passport
          FROM workers w
          INNER JOIN executives e ON w.uin = e.uin
-         WHERE w.is_executive = 'Yes' AND e.regime = ?
+         WHERE e.is_executive != 'No' AND e.regime = ?
          ORDER BY w.name ASC"
     );
     $exec_stmt->bind_param("s", $selected_regime);
 } else {
     $exec_stmt = $conn->prepare(
-        "SELECT w.id, w.email, w.name, w.phone, w.department, w.units, w.level, w.status,
-                e.office, e.regime, e.passport,
+        "SELECT w.id, w.uin, w.email, w.name, w.phone, w.department, w.units, w.level, w.status,
+                e.id AS exec_id, e.office, e.regime, e.passport, e.whatsapp,
                 w.passport AS worker_passport
          FROM workers w
          INNER JOIN executives e ON w.uin = e.uin
-         WHERE w.is_executive = 'Yes' AND w.status = 'Active'
+         WHERE e.is_executive != 'No' AND w.status = 'Active'
          ORDER BY w.name ASC"
     );
 }
@@ -142,6 +142,7 @@ function get_passport_src($passport_file) {
                                                         <th class="nk-tb-col tb-col-mb"><span class="sub-text">Unit(s)</span></th>
                                                         <th class="nk-tb-col tb-col-mb"><span class="sub-text">Office</span></th>
                                                         <th class="nk-tb-col tb-col-md"><span class="sub-text">Phone</span></th>
+                                                        <th class="nk-tb-col tb-col-md"><span class="sub-text">WhatsApp</span></th>
                                                         <th class="nk-tb-col tb-col-lg"><span class="sub-text">Department</span></th>
                                                         <th class="nk-tb-col tb-col-lg"><span class="sub-text">Level</span></th>
                                                         <th class="nk-tb-col tb-col-lg"><span class="sub-text">Regime</span></th>
@@ -195,6 +196,15 @@ function get_passport_src($passport_file) {
                                                         <td class="nk-tb-col tb-col-md">
                                                             <span><?= htmlspecialchars($worker['phone']) ?></span>
                                                         </td>
+                                                        <td class="nk-tb-col tb-col-md">
+                                                            <?php if (!empty($worker['whatsapp'])): ?>
+                                                                <a href="<?= htmlspecialchars($worker['whatsapp']) ?>" target="_blank" class="text-primary d-inline-flex align-items-center" style="gap:4px;">
+                                                                    <em class="icon ni ni-whatsapp" style="font-size:16px;"></em> Chat
+                                                                </a>
+                                                            <?php else: ?>
+                                                                <span class="text-muted">—</span>
+                                                            <?php endif; ?>
+                                                        </td>
                                                         <td class="nk-tb-col tb-col-lg">
                                                             <ul class="list-status">
                                                                 <li><em class="icon text-success ni ni-check-circle"></em>
@@ -229,7 +239,16 @@ function get_passport_src($passport_file) {
                                                                         <a href="#" class="dropdown-toggle btn btn-icon btn-trigger" data-toggle="dropdown"><em class="icon ni ni-more-h"></em></a>
                                                                         <div class="dropdown-menu dropdown-menu-right">
                                                                             <ul class="link-list-opt no-bdr">
-                                                                                <li><a href="#"><em class="icon ni ni-user-remove"></em><span>Unmark Executive</span></a></li>
+                                                                                <li>
+                                                                                    <a href="#" class="unmark-exec-btn" 
+                                                                                       data-exec-id="<?= $worker['exec_id'] ?>" 
+                                                                                       data-name="<?= htmlspecialchars($worker['name']) ?>" 
+                                                                                       data-regime="<?= htmlspecialchars($worker['regime']) ?>"
+                                                                                       data-uin="<?= htmlspecialchars($worker['uin']) ?>">
+                                                                                        <em class="icon ni ni-user-remove"></em>
+                                                                                        <span>Unmark Executive</span>
+                                                                                    </a>
+                                                                                </li>
                                                                             </ul>
                                                                         </div>
                                                                     </div>
@@ -274,10 +293,79 @@ function get_passport_src($passport_file) {
         </div>
         <!-- main @e -->
     </div>
-    <!-- app-root @e -->
+    <!-- ========== RESULT MODAL ========== -->
+    <div class="modal fade" tabindex="-1" id="resultModal">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <a href="#" class="close" data-dismiss="modal"><em class="icon ni ni-cross"></em></a>
+                <div class="modal-body modal-body-lg text-center">
+                    <div class="nk-modal" id="resultModalBody">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ========== RESULT MODAL END ========== -->
+
     <!-- JavaScript -->
     <script src="./assets/js/bundle.js?ver=2.2.0"></script>
     <script src="./assets/js/scripts.js?ver=2.2.0"></script>
+
+    <script>
+        $(document).ready(function () {
+            $(document).on('click', '.unmark-exec-btn', function (e) {
+                e.preventDefault();
+                var execId = $(this).data('exec-id');
+                var name   = $(this).data('name');
+                var regime = $(this).data('regime');
+                var uin    = $(this).data('uin');
+
+                if (!confirm('Are you sure you want to unmark ' + name + ' as an Executive for the ' + regime + ' regime?')) {
+                    return;
+                }
+
+                $.ajax({
+                    url: 'html/unmark_executive.php',
+                    type: 'POST',
+                    data: { exec_id: execId, regime: regime, uin: uin },
+                    dataType: 'json',
+                    success: function (data) {
+                        if (data.status === 'success') {
+                            $('#resultModalBody').html(`
+                                <em class="nk-modal-icon icon icon-circle icon-circle-xxl ni ni-check bg-success"></em>
+                                <h4 class="nk-modal-title">Executive Unmarked!</h4>
+                                <p class="sub-text mt-2">${data.message}</p>
+                            `);
+                        } else {
+                            $('#resultModalBody').html(`
+                                <em class="nk-modal-icon icon icon-circle icon-circle-xxl ni ni-cross bg-danger"></em>
+                                <h4 class="nk-modal-title">Action Failed</h4>
+                                <p class="text-danger mt-2">${data.message}</p>
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                                </div>
+                            `);
+                        }
+                        $('#resultModal').modal({ backdrop: 'static', keyboard: false });
+                        $('#resultModal').modal('show');
+
+                        if (data.status === 'success') {
+                            setTimeout(function () {
+                                if (data.regime_deleted) {
+                                    window.location.href = 'html/executives.php';
+                                } else {
+                                    location.reload();
+                                }
+                            }, 2000);
+                        }
+                    },
+                    error: function (xhr) {
+                        alert('Request failed: ' + xhr.responseText);
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 
 </html>

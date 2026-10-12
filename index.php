@@ -8,35 +8,43 @@ $events_result = $conn->query("SELECT * FROM events ORDER BY start_date DESC LIM
 $homepage_events = [];
 if ($events_result) { while ($row = $events_result->fetch_assoc()) { $homepage_events[] = $row; } }
 
-// Fetch the nearest upcoming or live event for countdown
-$nearest_event_query = "SELECT * FROM events WHERE (end_date IS NOT NULL AND end_date >= CURDATE()) OR (end_date IS NULL AND start_date >= CURDATE()) ORDER BY start_date ASC, start_time ASC LIMIT 1";
-$nearest_result = $conn->query($nearest_event_query);
+// Fetch the nearest upcoming event for countdown
+$now = time();
 $nearest_event = null;
-if ($nearest_result && $nearest_result->num_rows > 0) {
-    $nearest_event = $nearest_result->fetch_assoc();
-} else {
-    // Fallback: fetch the most recent event if no upcoming/live ones
-    $nearest_result = $conn->query("SELECT * FROM events ORDER BY start_date DESC LIMIT 1");
-    if ($nearest_result && $nearest_result->num_rows > 0) {
-        $nearest_event = $nearest_result->fetch_assoc();
+$current_date_str = date('Y-m-d');
+$stmt_nearest = $conn->prepare("SELECT * FROM events WHERE start_date >= ? ORDER BY start_date ASC, start_time ASC");
+if ($stmt_nearest) {
+    $stmt_nearest->bind_param("s", $current_date_str);
+    $stmt_nearest->execute();
+    $nearest_res = $stmt_nearest->get_result();
+    while ($row = $nearest_res->fetch_assoc()) {
+        $start_time_str = !empty($row['start_time']) ? $row['start_time'] : '00:00:00';
+        $start_dt = strtotime($row['start_date'] . ' ' . $start_time_str);
+        if ($start_dt > $now) {
+            $nearest_event = $row;
+            break;
+        }
     }
+    $stmt_nearest->close();
 }
 
 $countdown_date = '';
 $countdown_heading = '';
 if ($nearest_event) {
-    $countdown_date = date('Y/m/d H:i:s', strtotime($nearest_event['start_date'] . ' ' . (!empty($nearest_event['start_time']) ? $nearest_event['start_time'] : '00:00:00')));
+    $start_time_str = !empty($nearest_event['start_time']) ? $nearest_event['start_time'] : '00:00:00';
+    $countdown_date = date('Y/m/d H:i:s', strtotime($nearest_event['start_date'] . ' ' . $start_time_str));
     $event_title = htmlspecialchars($nearest_event['title']);
-    $start_dt = strtotime($nearest_event['start_date'] . ' ' . $nearest_event['start_time']);
+    $start_dt = strtotime($nearest_event['start_date'] . ' ' . $start_time_str);
     $formatted_date = date('M d, Y - l h:i a', $start_dt);
     if (!empty($nearest_event['end_date'])) {
-        $end_dt = strtotime($nearest_event['end_date'] . ' ' . $nearest_event['end_time']);
+        $end_time_str = !empty($nearest_event['end_time']) ? $nearest_event['end_time'] : '00:00:00';
+        $end_dt = strtotime($nearest_event['end_date'] . ' ' . $end_time_str);
         $formatted_date .= ' to ' . date('h:i a', $end_dt);
     }
     $countdown_heading = $event_title . ' | ' . $formatted_date . ' | Venue: ' . htmlspecialchars($nearest_event['venue']);
 } else {
     $countdown_heading = 'No upcoming events scheduled at the moment.';
-    $countdown_date = date('Y/m/d', strtotime('+7 days')); // fallback
+    $countdown_date = '1970/01/01 00:00:00'; // past date to trigger all 0s in jquery.countdown
 }
 
 // Fallback event images
@@ -823,11 +831,19 @@ if ($blogs_result) { while ($row = $blogs_result->fetch_assoc()) { $homepage_blo
 	<!-- Theme Custom Js -->
 	<script src="js/custom.js"></script>
 	<!-- REVOLUTION JS FILES -->
-	<script src="rs-plugin/js/jquery.themepunch.tools.min.js"></script>
-	<script src="rs-plugin/js/jquery.themepunch.revolution.min.js"></script>
-	<!-- SLIDER REVOLUTION 5.0 EXTENSIONS  (Load Extensions only on Local File Systems !  The following part can be removed on Server for On Demand Loading) -->
 	<script src="rs-plugin/js/home-2/rbtools.min.js"></script>
 	<script src="rs-plugin/js/home-2/rs6.min.js"></script>
+	<script>
+		// Fallback mapping for Slider Revolution 6 legacy compatibility check
+		if (typeof jQuery !== 'undefined' && jQuery.fn) {
+			if (!jQuery.fn.revolution) {
+				Object.defineProperty(jQuery.fn, 'revolution', {
+					get: function() { return this.revolutionInit; },
+					configurable: true
+				});
+			}
+		}
+	</script>
 	<script src="rs-plugin/js/home-2/home-2.js"></script>
 </body>
 <!-- Body End -->

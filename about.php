@@ -12,7 +12,7 @@
                             <!-- about button -->
                             <div class="text-center">
                                 <div class="about-img mb-4 mb-md-0">
-                                    <img src="images/about-us/about-us-img.png" class="" alt="about-img">
+                                    <img src="images/new logo.png" class="" alt="about-img">
                                 </div>
                                 <!-- .col -->
                             </div>
